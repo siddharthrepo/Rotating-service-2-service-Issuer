@@ -1,0 +1,26 @@
+{{define "layout"}}<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · s2s</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">s2s<span>issuer</span></a>
+  <nav>
+    <a href="/" class="{{if eq .Nav "graph"}}on{{end}}">Graph</a>
+    <a href="/services" class="{{if eq .Nav "services"}}on{{end}}">Services</a>
+    <a href="/grants" class="{{if eq .Nav "grants"}}on{{end}}">Grants</a>
+    <a href="/audit" class="{{if eq .Nav "audit"}}on{{end}}">Audit</a>
+  </nav>
+  <div class="who">
+    <span>{{.User.Name}} <em>{{.User.Role}}</em></span>
+    <form method="post" action="/logout"><button class="link">sign out</button></form>
+  </div>
+</header>
+<main>{{template "content" .}}</main>
+</body>
+</html>{{end}}

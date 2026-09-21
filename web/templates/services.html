@@ -1,0 +1,22 @@
+{{define "content"}}
+<div class="head"><h1>Services</h1>
+<p class="muted">One identity per service. Every pod of a service shares this one credential —
+   which is why tokens are issued per grant rather than per pod.</p></div>
+<table class="grid">
+<thead><tr><th>Name</th><th>Team</th><th>Client ID</th><th>Status</th><th>Secret rotated</th><th>In</th><th>Out</th></tr></thead>
+<tbody>
+{{range .Services}}
+<tr>
+  <td class="mono strong">{{.Name}}</td>
+  <td>{{if .OwnerTeam}}{{.OwnerTeam}}{{else}}<span class="muted">—</span>{{end}}</td>
+  <td class="mono muted">{{.ClientID}}</td>
+  <td><span class="pill {{.Status}}">{{.Status}}</span></td>
+  <td>{{if .SecretRotatedAt}}{{.SecretRotatedAt}}{{else}}<span class="muted">never</span>{{end}}</td>
+  <td class="num">{{.InDegree}}</td>
+  <td class="num">{{.OutDegree}}</td>
+</tr>
+{{else}}
+<tr><td colspan="7" class="muted pad">No services registered yet.</td></tr>
+{{end}}
+</tbody></table>
+{{end}}

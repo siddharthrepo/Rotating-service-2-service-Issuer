@@ -1,0 +1,39 @@
+{{define "content"}}
+<div class="head"><h1>Grants</h1>
+<p class="muted">A grant is the ACL: no grant, no token. <code>overlap</code> is derived as
+   <code>lifetime − rotate_after</code> — it is the window during which a superseded token
+   still works, which is what makes rotation zero-downtime.</p></div>
+<table class="grid">
+<thead><tr><th>Caller → Target</th><th>Scopes</th><th>Lifetime</th><th>Rotate</th><th>Overlap</th>
+<th>Calls/h</th><th>Status</th><th class="right">Actions</th></tr></thead>
+<tbody id="grant-rows">
+{{range .Grants}}{{template "grantrow" .}}{{else}}
+<tr><td colspan="8" class="muted pad">No grants yet.</td></tr>
+{{end}}
+</tbody></table>
+{{end}}
+
+{{define "grantrow"}}
+<tr id="grant-{{.ID}}">
+  <td class="mono strong">{{.Caller}} <span class="arrow">→</span> {{.Target}}</td>
+  <td>{{range .Scopes}}<code>{{.}}</code> {{else}}<span class="muted">none</span>{{end}}</td>
+  <td class="mono">{{.Lifetime}}</td>
+  <td class="mono">{{.RotateAfter}}</td>
+  <td class="mono accent">{{.Overlap}}</td>
+  <td class="num">{{.Calls}}</td>
+  <td><span class="pill {{.Status}}">{{.Status}}</span>
+      {{if .RevokedReason}}<div class="muted small">{{.RevokedReason}}</div>{{end}}</td>
+  <td class="right">
+    {{if and .CanMutate (eq .Status "active")}}
+      <button class="btn warn"
+        hx-post="/grants/{{.ID}}/rotate" hx-target="#grant-{{.ID}}" hx-swap="outerHTML"
+        hx-prompt="Reason for force-rotating this token?">force rotate</button>
+      <button class="btn danger"
+        hx-post="/grants/{{.ID}}/revoke" hx-target="#grant-{{.ID}}" hx-swap="outerHTML"
+        hx-confirm="Revoke this grant? The caller loses access immediately."
+        hx-prompt="Reason for revoking?">revoke</button>
+    {{else if not .CanMutate}}<span class="muted small">view only</span>
+    {{else}}<span class="muted small">—</span>{{end}}
+  </td>
+</tr>
+{{end}}

@@ -1,0 +1,47 @@
+# Container names and ports are prefixed to avoid colliding with anything else
+# running on the same machine.
+name: rotating-s2s
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: rotating-s2s-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE: s2s
+      MYSQL_USER: s2s
+      MYSQL_PASSWORD: s2spw
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpw"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - rotating-s2s-mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: rotating-s2s-redis
+    # Pure cache: no persistence, and volatile-lru as a memory backstop.
+    # Eviction is always safe here because every tier below the cache is
+    # authoritative -- an evicted entry falls through to MySQL and gets the
+    # true state, including "revoked".
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 512mb
+      --maxmemory-policy volatile-lru
+      --maxmemory-samples 10
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  rotating-s2s-mysql-data:

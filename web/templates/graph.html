@@ -1,0 +1,17 @@
+{{define "content"}}
+<div class="head">
+  <h1>Service dependency graph</h1>
+  <p class="muted">Built from validation traffic over the last hour. Every introspect call is
+     evidence that one service called another — nobody had to instrument anything.</p>
+</div>
+<div class="legend">
+  <span><i class="dot live"></i> active, carrying traffic</span>
+  <span><i class="dot idle"></i> active, no calls in the window</span>
+  <span><i class="dot dead"></i> revoked</span>
+  <span class="muted">edge thickness = call volume</span>
+</div>
+<div id="cy"></div>
+<div id="edge-detail" class="card hidden"></div>
+<script src="/static/cytoscape.min.js"></script>
+<script src="/static/graph.js"></script>
+{{end}}

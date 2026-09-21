@@ -1,0 +1,20 @@
+{{define "content"}}
+<div class="head"><h1>Audit</h1>
+<p class="muted">Append-only. Every issuance, revocation, rotation and registration, with the
+   actor that caused it. For a security product this is a feature, not telemetry.</p></div>
+<table class="grid">
+<thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Reason / detail</th></tr></thead>
+<tbody>
+{{range .Entries}}
+<tr>
+  <td class="mono muted nowrap">{{.CreatedAt}}</td>
+  <td><span class="pill {{.ActorType}}">{{.ActorType}}</span> <span class="mono">{{.ActorID}}</span></td>
+  <td><code>{{.Action}}</code></td>
+  <td class="mono muted">{{.TargetType}}{{if .TargetID}}:{{.TargetID}}{{end}}</td>
+  <td class="small">{{if .Reason}}<strong>{{.Reason}}</strong> {{end}}{{.Detail}}</td>
+</tr>
+{{else}}
+<tr><td colspan="5" class="muted pad">Nothing recorded yet.</td></tr>
+{{end}}
+</tbody></table>
+{{end}}
