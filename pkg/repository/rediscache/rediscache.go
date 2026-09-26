@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 func Open(cfg structs.Redis) (*redis.Client, error) {

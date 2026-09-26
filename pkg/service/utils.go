@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 func entry(actor structs.Actor, action, targetType, targetID string) *structs.AuditEntry {

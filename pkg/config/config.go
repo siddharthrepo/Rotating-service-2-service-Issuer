@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 // Load resolves flags -> env (S2S_ prefix) -> file -> defaults.

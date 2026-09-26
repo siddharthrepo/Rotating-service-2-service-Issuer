@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
 )
 
 // ScopeList maps a MySQL JSON column to []string.
@@ -197,17 +197,20 @@ func (t *TokenDetail) ToCached() *CachedToken {
 type CachedToken struct {
 	NotFound bool `json:"nf,omitempty"`
 
-	JTI          string    `json:"jti,omitempty"`
-	GrantID      uint64    `json:"gid,omitempty"`
-	Caller       string    `json:"cl,omitempty"`
-	Target       string    `json:"tg,omitempty"`
-	Scopes       []string  `json:"sc,omitempty"`
-	IssuedAt     time.Time `json:"iat,omitempty"`
-	ExpiresAt    time.Time `json:"exp,omitempty"`
-	Revoked      bool      `json:"rv,omitempty"`
-	GrantActive  bool      `json:"ga,omitempty"`
-	CallerActive bool      `json:"ca,omitempty"`
-	TargetActive bool      `json:"ta,omitempty"`
+	JTI       string    `json:"jti,omitempty"`
+	GrantID   uint64    `json:"gid,omitempty"`
+	Caller    string    `json:"cl,omitempty"`
+	Target    string    `json:"tg,omitempty"`
+	Scopes    []string  `json:"sc,omitempty"`
+	IssuedAt  time.Time `json:"iat,omitempty"`
+	ExpiresAt time.Time `json:"exp,omitempty"`
+	Revoked   bool      `json:"rv,omitempty"`
+	// RevokedReason distinguishes why a tombstone was written -- an operator
+	// reading logs needs "service_disabled" to mean that, not "revoked".
+	RevokedReason string `json:"rvr,omitempty"`
+	GrantActive   bool   `json:"ga,omitempty"`
+	CallerActive  bool   `json:"ca,omitempty"`
+	TargetActive  bool   `json:"ta,omitempty"`
 }
 
 // Validate decides whether a presented token is usable by the service asking about
@@ -217,6 +220,9 @@ func (c *CachedToken) Validate(now time.Time, askingService string) (bool, strin
 	case c.NotFound:
 		return false, constants.ReasonNotFound
 	case c.Revoked:
+		if c.RevokedReason != "" {
+			return false, c.RevokedReason
+		}
 		return false, constants.ReasonRevoked
 	case !c.GrantActive:
 		return false, constants.ReasonGrantRevoked
@@ -563,6 +569,18 @@ type IntrospectResponse struct {
 	JTI       string     `json:"jti,omitempty"`
 	IssuedAt  *time.Time `json:"issued_at,omitempty"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// RevokedToken is a token killed by a revocation, with the expiry its cache
+// tombstone should inherit.
+type RevokedToken struct {
+	TokenHash string    `db:"token_hash"`
+	ExpiresAt time.Time `db:"expires_at"`
+}
+
+// Tombstone builds the negative cache entry written in place of deleting a key.
+func Tombstone(expiresAt time.Time, reason string) *CachedToken {
+	return &CachedToken{Revoked: true, RevokedReason: reason, ExpiresAt: expiresAt}
 }
 
 // RevokeRequest carries the operator's reason, which is recorded in the audit

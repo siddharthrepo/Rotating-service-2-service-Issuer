@@ -9,10 +9,10 @@ import (
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/crypto"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/crypto"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 type tokenRepo interface {
@@ -35,6 +35,7 @@ type CurrentTokens interface {
 type TokenCache interface {
 	Get(ctx context.Context, hash string) (*structs.CachedToken, error)
 	Set(ctx context.Context, hash string, v *structs.CachedToken, ttl time.Duration) error
+	SetIfAbsent(ctx context.Context, hash string, v *structs.CachedToken, ttl time.Duration) (bool, error)
 	Delete(ctx context.Context, hashes ...string) error
 }
 
@@ -234,7 +235,11 @@ func (t *Tokens) lookup(ctx context.Context, hash string) (*structs.CachedToken,
 			if apperr.HasCode(err, apperr.NotFound.Code) {
 
 				miss := &structs.CachedToken{NotFound: true}
-				_ = t.tokens.Set(ctx, hash, miss, t.negTTL)
+				if won, err := t.tokens.SetIfAbsent(ctx, hash, miss, t.negTTL); err == nil && !won {
+					if cur := t.currentEntry(ctx, hash); cur != nil {
+						return cur, nil
+					}
+				}
 				return miss, nil
 			}
 			return nil, err
@@ -249,6 +254,16 @@ func (t *Tokens) lookup(ctx context.Context, hash string) (*structs.CachedToken,
 		return nil, err
 	}
 	return v.(*structs.CachedToken), nil
+}
+
+// currentEntry re-reads whatever is actually cached, used when this goroutine
+// lost the populate race and must defer to the winner.
+func (t *Tokens) currentEntry(ctx context.Context, hash string) *structs.CachedToken {
+	cur, err := t.tokens.Get(ctx, hash)
+	if err != nil {
+		return nil
+	}
+	return cur
 }
 
 func (t *Tokens) observe(hit bool, err error) {

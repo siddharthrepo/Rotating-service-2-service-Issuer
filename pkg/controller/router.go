@@ -10,9 +10,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/middleware"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
-	"github.com/siddharth120604/rotating-s2s/web"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/middleware"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/web"
 )
 
 type rateLimiter interface {

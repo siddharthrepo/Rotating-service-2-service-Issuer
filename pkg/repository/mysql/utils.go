@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
 )
 
 func isDuplicate(err error, index string) bool {

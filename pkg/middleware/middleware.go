@@ -8,11 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/controller/render"
-	"github.com/siddharth120604/rotating-s2s/pkg/crypto"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/controller/render"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/crypto"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 // RequestID accepts an inbound id so a trace survives across services, and mints

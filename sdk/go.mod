@@ -1,4 +1,4 @@
-module github.com/siddharth120604/rotating-s2s/sdk
+module github.com/siddharthrepo/Rotating-service-2-service-Issuer/sdk
 
 go 1.25
 

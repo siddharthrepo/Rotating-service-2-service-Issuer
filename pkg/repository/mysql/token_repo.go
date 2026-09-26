@@ -7,8 +7,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 type TokenRepo struct{ db *sqlx.DB }
@@ -119,18 +119,18 @@ func (r *TokenRepo) ByID(ctx context.Context, tx *sqlx.Tx, id uint64) (*structs.
 
 // RevokeLiveByGrant revokes every still-usable token for a grant and returns
 // their hashes, so the caller knows which cache keys to invalidate.
-func (r *TokenRepo) RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID uint64, at time.Time) ([]string, error) {
-	hashes := []string{}
-	err := tx.SelectContext(ctx, &hashes, `
-		SELECT token_hash
+func (r *TokenRepo) RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID uint64, at time.Time) ([]structs.RevokedToken, error) {
+	killed := []structs.RevokedToken{}
+	err := tx.SelectContext(ctx, &killed, `
+		SELECT token_hash, expires_at
 		  FROM tokens
 		 WHERE grant_id = ? AND revoked_at IS NULL AND expires_at > ?
 		   FOR UPDATE`, grantID, at)
 	if err != nil {
 		return nil, fmt.Errorf("select live tokens for revocation: %w", err)
 	}
-	if len(hashes) == 0 {
-		return hashes, nil
+	if len(killed) == 0 {
+		return killed, nil
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -140,7 +140,26 @@ func (r *TokenRepo) RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID 
 		at, grantID, at); err != nil {
 		return nil, fmt.Errorf("revoke live tokens: %w", err)
 	}
-	return hashes, nil
+	return killed, nil
+}
+
+// LiveByService lists every usable token where the service is either endpoint.
+//
+// Disabling a service must invalidate these: the cached record carries the
+// service's status at cache time, so without this a disabled service's tokens
+// keep validating until their entries expire.
+func (r *TokenRepo) LiveByService(ctx context.Context, serviceID uint64, at time.Time) ([]structs.RevokedToken, error) {
+	out := []structs.RevokedToken{}
+	err := r.db.SelectContext(ctx, &out, `
+		SELECT t.token_hash, t.expires_at
+		  FROM tokens t
+		  JOIN grants g ON g.id = t.grant_id
+		 WHERE (g.caller_service_id = ? OR g.target_service_id = ?)
+		   AND t.revoked_at IS NULL AND t.expires_at > ?`, serviceID, serviceID, at)
+	if err != nil {
+		return nil, fmt.Errorf("select live tokens by service: %w", err)
+	}
+	return out, nil
 }
 
 // LiveByGrant lists tokens for a grant that have not expired or been revoked.

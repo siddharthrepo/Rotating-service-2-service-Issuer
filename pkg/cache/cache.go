@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 // NoopCurrentTokens satisfies the current-token cache with permanent misses.
@@ -35,6 +35,10 @@ func (NoopTokenCache) Get(context.Context, string) (*structs.CachedToken, error)
 
 func (NoopTokenCache) Set(context.Context, string, *structs.CachedToken, time.Duration) error {
 	return nil
+}
+
+func (NoopTokenCache) SetIfAbsent(context.Context, string, *structs.CachedToken, time.Duration) (bool, error) {
+	return true, nil
 }
 
 func (NoopTokenCache) Delete(context.Context, ...string) error { return nil }

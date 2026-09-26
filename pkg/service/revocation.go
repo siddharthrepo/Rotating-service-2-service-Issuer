@@ -8,14 +8,15 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 type revocationTokenRepo interface {
 	tokenRepo
-	RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID uint64, at time.Time) ([]string, error)
+	LiveByService(ctx context.Context, serviceID uint64, at time.Time) ([]structs.RevokedToken, error)
+	RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID uint64, at time.Time) ([]structs.RevokedToken, error)
 }
 
 type revocationGrantRepo interface {
@@ -53,13 +54,13 @@ func (r *Revocation) RevokeGrant(ctx context.Context, grantID uint64, actor stru
 		return nil, apperr.GrantRevoked.WithMessage("grant %d is already revoked", grantID)
 	}
 
-	var hashes []string
+	var killed []structs.RevokedToken
 
 	err = r.tx.WithTx(ctx, func(tx *sqlx.Tx) error {
 		if err := r.grants.SetRevoked(ctx, tx, grantID, reason); err != nil {
 			return err
 		}
-		hashes, err = r.tokens.RevokeLiveByGrant(ctx, tx, grantID, r.now())
+		killed, err = r.tokens.RevokeLiveByGrant(ctx, tx, grantID, r.now())
 		if err != nil {
 			return err
 		}
@@ -69,7 +70,7 @@ func (r *Revocation) RevokeGrant(ctx context.Context, grantID uint64, actor stru
 		e.Metadata = structs.JSONMap{
 			"caller":         detail.CallerName,
 			"target":         detail.TargetName,
-			"tokens_revoked": len(hashes),
+			"tokens_revoked": len(killed),
 		}
 		return r.audit.AppendTx(ctx, tx, e)
 	})
@@ -77,14 +78,14 @@ func (r *Revocation) RevokeGrant(ctx context.Context, grantID uint64, actor stru
 		return nil, err
 	}
 
-	if err := r.invalidate(ctx, grantID, hashes); err != nil {
+	if err := r.invalidate(ctx, grantID, killed); err != nil {
 		return nil, err
 	}
 
 	return &structs.RevokeResponse{
 		GrantID:       grantID,
 		Status:        string(constants.GrantRevoked),
-		TokensRevoked: len(hashes),
+		TokensRevoked: len(killed),
 		Reason:        reason,
 	}, nil
 }
@@ -100,7 +101,7 @@ func (r *Revocation) ForceRotate(ctx context.Context, grantID uint64, actor stru
 	}
 
 	var (
-		hashes    []string
+		killed    []structs.RevokedToken
 		issued    *structs.Token
 		plaintext string
 	)
@@ -109,7 +110,7 @@ func (r *Revocation) ForceRotate(ctx context.Context, grantID uint64, actor stru
 			return err
 		}
 
-		hashes, err = r.tokens.RevokeLiveByGrant(ctx, tx, grantID, r.now())
+		killed, err = r.tokens.RevokeLiveByGrant(ctx, tx, grantID, r.now())
 		if err != nil {
 			return err
 		}
@@ -128,7 +129,7 @@ func (r *Revocation) ForceRotate(ctx context.Context, grantID uint64, actor stru
 		e.Metadata = structs.JSONMap{
 			"caller":         detail.CallerName,
 			"target":         detail.TargetName,
-			"tokens_revoked": len(hashes),
+			"tokens_revoked": len(killed),
 			"new_token_jti":  issued.JTI,
 		}
 		return r.audit.AppendTx(ctx, tx, e)
@@ -137,7 +138,7 @@ func (r *Revocation) ForceRotate(ctx context.Context, grantID uint64, actor stru
 		return nil, err
 	}
 
-	if err := r.invalidate(ctx, grantID, hashes); err != nil {
+	if err := r.invalidate(ctx, grantID, killed); err != nil {
 		return nil, err
 	}
 
@@ -150,16 +151,26 @@ func (r *Revocation) ForceRotate(ctx context.Context, grantID uint64, actor stru
 	return &structs.RotateResponse{
 		GrantID:       grantID,
 		Status:        string(constants.GrantActive),
-		TokensRevoked: len(hashes),
+		TokensRevoked: len(killed),
 		NewTokenJTI:   issued.JTI,
 		ExpiresAt:     issued.ExpiresAt,
 		Reason:        reason,
 	}, nil
 }
 
-func (r *Revocation) invalidate(ctx context.Context, grantID uint64, hashes []string) error {
+// invalidate writes a tombstone for each killed token.
+//
+// It does NOT delete. Deleting loses a race: a reader that missed the cache and
+// read MySQL before this revocation committed can repopulate the key after the
+// delete lands, leaving a revoked token cached as valid for the rest of its
+// TTL. Writing Revoked:true with an unconditional Set, while the read path
+// repopulates with SetIfAbsent, makes the revoker win either ordering.
+//
+// The tombstone inherits the token's own expiry, so it disappears exactly when
+// the token would have become useless anyway.
+func (r *Revocation) invalidate(ctx context.Context, grantID uint64, killed []structs.RevokedToken) error {
 	err := retry(ctx, constants.InvalidationAttempts, constants.InvalidationBackoff, func() error {
-		if err := r.tcache.Delete(ctx, hashes...); err != nil {
+		if err := r.tombstone(ctx, killed, constants.ReasonRevoked); err != nil {
 			return err
 		}
 		return r.cache.Delete(ctx, grantID)
@@ -170,8 +181,46 @@ func (r *Revocation) invalidate(ctx context.Context, grantID uint64, hashes []st
 
 	r.log.Error("cache invalidation failed after revocation",
 		zap.Uint64("grant_id", grantID),
-		zap.Int("tokens", len(hashes)),
+		zap.Int("tokens", len(killed)),
 		zap.Error(err))
 
 	return apperr.RevokedButCacheUnconfirmed.Wrap(err)
+}
+
+// tombstone marks each hash revoked in the shared cache.
+func (r *Revocation) tombstone(ctx context.Context, killed []structs.RevokedToken, reason string) error {
+	now := r.now()
+	for _, k := range killed {
+		ttl := k.ExpiresAt.Sub(now)
+		if ttl <= 0 {
+			continue // already expired; nothing can serve it
+		}
+		if err := r.tcache.Set(ctx, k.TokenHash, structs.Tombstone(k.ExpiresAt, reason), ttl); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RevokeTokensForService tombstones every live token where the service is
+// either endpoint.
+//
+// Disabling a service has to do this. A cached record carries the endpoints'
+// statuses as they were when it was written, so without invalidation a disabled
+// service's tokens keep validating until those entries expire -- up to a full
+// token lifetime after the operator believed access was cut.
+func (r *Revocation) RevokeTokensForService(ctx context.Context, serviceID uint64) (int, error) {
+	killed, err := r.tokens.LiveByService(ctx, serviceID, r.now())
+	if err != nil {
+		return 0, err
+	}
+	if len(killed) == 0 {
+		return 0, nil
+	}
+	if err := r.tombstone(ctx, killed, constants.ReasonServiceDisabled); err != nil {
+		r.log.Error("invalidating tokens for a disabled service",
+			zap.Uint64("service_id", serviceID), zap.Error(err))
+		return 0, apperr.RevokedButCacheUnconfirmed.Wrap(err)
+	}
+	return len(killed), nil
 }

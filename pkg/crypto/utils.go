@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 // ErrInvalidHash means a stored hash is not a hash this code can read.

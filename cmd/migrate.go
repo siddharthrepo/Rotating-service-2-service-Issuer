@@ -9,9 +9,9 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/spf13/cobra"
 
-	"github.com/siddharth120604/rotating-s2s/migrations"
-	"github.com/siddharth120604/rotating-s2s/pkg/config"
-	repomysql "github.com/siddharth120604/rotating-s2s/pkg/repository/mysql"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/migrations"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/config"
+	repomysql "github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/repository/mysql"
 )
 
 var migrateCmd = &cobra.Command{

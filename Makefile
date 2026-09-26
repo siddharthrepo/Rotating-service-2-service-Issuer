@@ -1,4 +1,4 @@
-.PHONY: help up down build run migrate fmt vet test demo clean
+.PHONY: help up down build run migrate fmt vet test test-integration demo clean
 
 BIN := bin/s2s
 ENV := S2S_MYSQL_DSN='s2s:s2spw@tcp(127.0.0.1:3308)/s2s?parseTime=true&multiStatements=true&loc=UTC' \
@@ -33,9 +33,13 @@ fmt:       ## Format
 vet:       ## Vet
 	go vet ./...
 
-test:      ## Run tests with the race detector
-	go test -race ./...
+test:      ## Run unit and SDK tests with the race detector
+	go test -race $$(go list ./... | grep -v /test)
 	cd sdk && go test -race ./...
+
+test-integration: ## Run integration tests against the running MySQL and Redis
+	@$(ENV) S2S_TEST_MYSQL_DSN='s2s:s2spw@tcp(127.0.0.1:3308)/s2s?parseTime=true&multiStatements=true&loc=UTC' \
+	  S2S_TEST_REDIS_ADDR=127.0.0.1:6381 go test -race -count=1 -v ./test/...
 
 demo:      ## Run the two-service example against a running issuer
 	@cd examples && ./demo.sh

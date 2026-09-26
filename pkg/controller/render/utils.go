@@ -3,7 +3,7 @@ package render
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
 )
 
 func requestID(c *gin.Context) string {

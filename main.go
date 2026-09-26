@@ -1,6 +1,6 @@
 package main
 
-import "github.com/siddharth120604/rotating-s2s/cmd"
+import "github.com/siddharthrepo/Rotating-service-2-service-Issuer/cmd"
 
 func main() {
 	cmd.Execute()

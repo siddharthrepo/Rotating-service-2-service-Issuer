@@ -1,4 +1,4 @@
-module github.com/siddharth120604/rotating-s2s
+module github.com/siddharthrepo/Rotating-service-2-service-Issuer
 
 go 1.25.8
 
@@ -14,6 +14,7 @@ require (
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.42.0
 	golang.org/x/sync v0.17.0
+	golang.org/x/term v0.35.0
 )
 
 require (
@@ -58,7 +59,6 @@ require (
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/net v0.45.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )

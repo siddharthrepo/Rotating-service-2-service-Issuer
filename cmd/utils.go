@@ -6,11 +6,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/cache"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/repository/rediscache"
-	"github.com/siddharth120604/rotating-s2s/pkg/service"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/cache"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/repository/rediscache"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/service"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 func buildCache(cfg *structs.Config, log *zap.Logger) (

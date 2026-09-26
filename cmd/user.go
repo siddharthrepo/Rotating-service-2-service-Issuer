@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/config"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/repository/mysql"
-	"github.com/siddharth120604/rotating-s2s/pkg/service"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/config"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/repository/mysql"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/service"
 )
 
 var userRole string

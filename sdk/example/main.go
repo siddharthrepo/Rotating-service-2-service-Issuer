@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	s2s "github.com/siddharth120604/rotating-s2s/sdk"
+	s2s "github.com/siddharthrepo/Rotating-service-2-service-Issuer/sdk"
 )
 
 const issuer = "http://localhost:8080"

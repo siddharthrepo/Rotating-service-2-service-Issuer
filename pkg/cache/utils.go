@@ -3,7 +3,7 @@ package cache
 import (
 	"fmt"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
 )
 
 // CurrentTokenKey is the key a grant's plaintext token is cached under.

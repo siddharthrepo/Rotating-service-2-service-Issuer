@@ -9,8 +9,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/cache"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/cache"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 // TokenCache fronts the validation lookup.
@@ -53,6 +53,35 @@ func (t *TokenCache) Set(ctx context.Context, hash string, v *structs.CachedToke
 		return fmt.Errorf("redis set token: %w", err)
 	}
 	return nil
+}
+
+// SetIfAbsent stores a record only when the key is unset, using Redis SET NX.
+//
+// This is what makes revocation race-free. The read path repopulates with
+// SetIfAbsent while revocation writes its tombstone with an unconditional Set,
+// so the revoker always wins whichever order they interleave in:
+//
+//	reader repopulates, then revoker writes  -> tombstone overwrites   (Set wins)
+//	revoker writes, then reader repopulates  -> NX fails, tombstone stays
+//
+// With a plain Delete the first ordering leaves a revoked token cached and
+// valid for the remainder of its TTL.
+func (t *TokenCache) SetIfAbsent(ctx context.Context, hash string, v *structs.CachedToken, ttl time.Duration) (bool, error) {
+	if ttl <= 0 {
+		return false, nil
+	}
+	raw := []byte(`{"nf":true}`)
+	if !v.NotFound {
+		var err error
+		if raw, err = json.Marshal(v); err != nil {
+			return false, fmt.Errorf("marshal cached token: %w", err)
+		}
+	}
+	set, err := t.c.SetNX(ctx, cache.TokenKey(hash), raw, ttl).Result()
+	if err != nil {
+		return false, fmt.Errorf("redis setnx token: %w", err)
+	}
+	return set, nil
 }
 
 // Delete removes entries.

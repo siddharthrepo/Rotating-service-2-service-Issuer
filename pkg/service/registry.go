@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/apperr"
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/crypto"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/apperr"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/crypto"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 type serviceRepo interface {
@@ -31,13 +31,26 @@ type ServiceAuthCache interface {
 }
 
 // Registry owns service identities: one row per service, never per pod.
+// TokenInvalidator tombstones a service's live tokens. Wired in after
+// construction because the revocation service depends on Registry, so it
+// cannot be a constructor argument without a cycle.
+type TokenInvalidator interface {
+	RevokeTokensForService(ctx context.Context, serviceID uint64) (int, error)
+}
+
 type Registry struct {
 	repo    serviceRepo
 	audit   *Audit
 	argon2  structs.Argon2Params
 	auth    ServiceAuthCache
 	authTTL time.Duration
+
+	invalidator TokenInvalidator
 }
+
+// SetTokenInvalidator completes the wiring so disabling a service also kills
+// its live tokens.
+func (r *Registry) SetTokenInvalidator(inv TokenInvalidator) { r.invalidator = inv }
 
 func NewRegistry(repo serviceRepo, audit *Audit, argon2 structs.Argon2Params,
 	auth ServiceAuthCache, authTTL time.Duration) *Registry {
@@ -153,16 +166,35 @@ func (r *Registry) SetStatus(ctx context.Context, id uint64, status constants.Se
 		return err
 	}
 
-	if svc, err := r.repo.ByID(ctx, id); err == nil {
-		_ = r.auth.Delete(ctx, svc.ClientID)
+	svc, err := r.repo.ByID(ctx, id)
+	if err != nil {
+		return err
 	}
+	// Stop the service authenticating immediately, rather than at the end of
+	// the auth cache TTL.
+	_ = r.auth.Delete(ctx, svc.ClientID)
+
+	// Disabling must also kill tokens already issued. A cached validation
+	// record carries the endpoints' statuses as they were when it was written,
+	// so without this its live tokens keep passing until those entries expire.
+	invalidated := 0
+	if status == constants.ServiceDisabled && r.invalidator != nil {
+		n, err := r.invalidator.RevokeTokensForService(ctx, id)
+		if err != nil {
+			return err
+		}
+		invalidated = n
+	}
+
 	e := entry(actor, constants.ActionServiceUpdate, constants.TargetService,
 		strconv.FormatUint(id, 10))
-	e.Metadata = structs.JSONMap{"status": string(status)}
+	e.Metadata = structs.JSONMap{
+		"status":             string(status),
+		"tokens_invalidated": invalidated,
+	}
 	return r.audit.Append(ctx, e)
 }
 
-// RotateSecret issues a new bootstrap credential.
 func (r *Registry) RotateSecret(ctx context.Context, id uint64, actor structs.Actor) (*structs.Credentials, error) {
 	secret, err := crypto.GenerateClientSecret()
 	if err != nil {

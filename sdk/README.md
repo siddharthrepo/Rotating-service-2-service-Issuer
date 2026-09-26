@@ -7,7 +7,7 @@ drag a web framework, a database driver, or a metrics library into your service.
 Dependencies are the standard library plus `golang.org/x/sync`.
 
 ```bash
-go get github.com/siddharth120604/rotating-s2s/sdk
+go get github.com/siddharthrepo/Rotating-service-2-service-Issuer/sdk
 ```
 
 ---

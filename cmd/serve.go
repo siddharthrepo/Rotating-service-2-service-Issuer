@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/config"
-	"github.com/siddharth120604/rotating-s2s/pkg/controller"
-	"github.com/siddharth120604/rotating-s2s/pkg/repository/mysql"
-	"github.com/siddharth120604/rotating-s2s/pkg/service"
-	"github.com/siddharth120604/rotating-s2s/pkg/telemetry"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/config"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/controller"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/repository/mysql"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/service"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/telemetry"
 )
 
 var serveCmd = &cobra.Command{
@@ -70,6 +70,10 @@ var serveCmd = &cobra.Command{
 			txManager, auditSvc, stats, cfg.Cache.NegativeTTL)
 		revocationSvc := service.NewRevocation(tokenRepo, grantRepo, currentTokens,
 			tokenCache, txManager, auditSvc, log)
+		// Completes a cycle the constructors cannot: disabling a service has to
+		// reach the revocation service, which itself depends on the registry.
+		registrySvc.SetTokenInvalidator(revocationSvc)
+
 		authSvc := service.NewAuth(userRepo, auditSvc, cfg.Security.Argon2)
 		graphSvc := service.NewGraph(graphRepo, stats)
 

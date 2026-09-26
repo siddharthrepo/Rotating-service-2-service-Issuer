@@ -12,8 +12,8 @@ import (
 	"github.com/oklog/ulid/v2"
 	"golang.org/x/crypto/argon2"
 
-	"github.com/siddharth120604/rotating-s2s/pkg/constants"
-	"github.com/siddharth120604/rotating-s2s/pkg/structs"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/constants"
+	"github.com/siddharthrepo/Rotating-service-2-service-Issuer/pkg/structs"
 )
 
 func DefaultArgon2Params() structs.Argon2Params {
