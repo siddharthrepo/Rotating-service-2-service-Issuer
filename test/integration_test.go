@@ -9,6 +9,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,7 @@ type harness struct {
 	grants   *service.Grants
 	tokens   *service.Tokens
 	revoke   *service.Revocation
+	audit    *service.Audit
 	caller   *structs.Service
 	target   *structs.Service
 	grant    *structs.Grant
@@ -85,7 +87,7 @@ func newHarness(t *testing.T) *harness {
 	registrySvc.SetTokenInvalidator(revokeSvc)
 
 	h := &harness{db: db, rdb: rdb, registry: registrySvc, grants: grantsSvc,
-		tokens: tokensSvc, revoke: revokeSvc}
+		tokens: tokensSvc, revoke: revokeSvc, audit: auditSvc}
 	h.reset(t)
 	h.seed(t)
 	return h
@@ -202,46 +204,124 @@ func TestDisablingTargetInvalidatesLiveTokens(t *testing.T) {
 	}
 }
 
+// Disabling must also clear the grant's current-token key.
+//
+// Otherwise re-enabling within rotate_after hands the caller back the same
+// tombstoned token: the SDK 401s, refreshes, gets the identical dead token,
+// and loops until the key expires.
+func TestDisableThenReenableIssuesAFreshToken(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	actor := structs.Actor{Type: constants.ActorUser, ID: "test"}
+
+	first := h.issue(t)
+	h.introspect(t, first)
+
+	if err := h.registry.SetStatus(ctx, h.caller.ID, constants.ServiceDisabled, actor); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+	if h.rdb.Exists(ctx, fmt.Sprintf("grant:cur:%d", h.grant.ID)).Val() != 0 {
+		t.Fatal("grant:cur survived the disable; a re-enable would reissue a dead token")
+	}
+
+	if err := h.registry.SetStatus(ctx, h.caller.ID, constants.ServiceActive, actor); err != nil {
+		t.Fatalf("re-enable: %v", err)
+	}
+
+	second := h.issue(t)
+	if second == first {
+		t.Fatal("re-enabling handed back the tombstoned token")
+	}
+	if res := h.introspect(t, second); !res.Active {
+		t.Fatalf("the reissued token is not usable: %+v", res)
+	}
+}
+
 // ─────────────────────────── BUG 2 ────────────────────────────────────
 
-// The revocation race, deterministically.
+// blockingTokenRepo wraps the real repo and lets a test stop a ByHash call
+// midway, holding open the exact window revocation has to survive: the reader
+// has loaded a valid row from MySQL but has not yet written it to the cache.
+type blockingTokenRepo struct {
+	*mysql.TokenRepo
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingTokenRepo) ByHash(ctx context.Context, hash string) (*structs.TokenDetail, error) {
+	out, err := b.TokenRepo.ByHash(ctx, hash)
+	// Only the first read blocks; later ones run normally.
+	b.once.Do(func() {
+		close(b.entered)
+		<-b.release
+	})
+	return out, err
+}
+
+// The revocation race, driven through Introspect rather than the cache API.
 //
-// A reader misses the cache and reads MySQL. Revocation commits and invalidates
-// while that read is in flight. The reader then writes what it saw.
+// A reader misses the cache and loads a valid row from MySQL. While it is still
+// in flight, a revocation commits and writes its tombstone. The reader then
+// finishes and tries to cache what it saw.
 //
-// With delete-based invalidation the reader's write lands after the delete and
-// resurrects a revoked token for the rest of its TTL. A tombstone plus a
-// set-if-absent populate makes the revoker win regardless of ordering.
+// With an unconditional Set the reader overwrites the tombstone and the token
+// is served as valid for the rest of its TTL. With SetIfAbsent the write loses,
+// the reader re-reads the winning entry, and the revocation stands.
+//
+// This exercises service.Tokens.lookup(), which is where the bug actually
+// lives -- testing the cache primitive alone passes either way.
 func TestRevocationBeatsInFlightCacheFill(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 	token := h.issue(t)
 	hash := crypto.HashToken(token)
-	cache := rediscache.NewTokenCache(h.rdb)
 
-	// Snapshot what a reader would have seen BEFORE the revocation: a valid
-	// record. This stands in for a read already in flight.
-	inFlight, err := mysql.NewTokenRepo(h.db).ByHash(ctx, hash)
-	if err != nil {
-		t.Fatalf("read: %v", err)
+	// A Tokens service whose repository can be paused mid-read.
+	blocking := &blockingTokenRepo{
+		TokenRepo: mysql.NewTokenRepo(h.db),
+		entered:   make(chan struct{}),
+		release:   make(chan struct{}),
 	}
-	stale := inFlight.ToCached()
+	slowTokens := service.NewTokens(blocking, h.grants,
+		rediscache.NewCurrentTokens(h.rdb), rediscache.NewTokenCache(h.rdb),
+		mysql.NewTxManager(h.db), h.audit, rediscache.NewStats(h.rdb), time.Second)
+
+	// Cold cache, so the read really does reach MySQL.
+	if err := h.rdb.Del(ctx, "tok:"+hash).Err(); err != nil {
+		t.Fatalf("clear cache: %v", err)
+	}
+
+	type result struct {
+		res *structs.IntrospectResponse
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		res, err := slowTokens.Introspect(ctx, h.target, token)
+		done <- result{res, err}
+	}()
+
+	<-blocking.entered // the reader now holds a pre-revocation view
 
 	if _, err := h.revoke.RevokeGrant(ctx, h.grant.ID,
-		structs.Actor{Type: constants.ActorUser, ID: "test"}, "race test"); err != nil {
+		structs.Actor{Type: constants.ActorUser, ID: "test"}, "in-flight race"); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 
-	// The in-flight reader now finishes and repopulates. This is the exact
-	// interleaving that a plain Delete could not survive.
-	won, err := cache.SetIfAbsent(ctx, hash, stale, 45*time.Minute)
-	if err != nil {
-		t.Fatalf("repopulate: %v", err)
-	}
-	if won {
-		t.Fatal("the stale fill overwrote the revocation tombstone")
+	close(blocking.release) // let the stale reader finish and try to cache
+	got := <-done
+	if got.err != nil {
+		t.Fatalf("introspect: %v", got.err)
 	}
 
+	// The in-flight reader itself must not report active either: it can see
+	// the tombstone that landed while it was blocked.
+	if got.res.Active {
+		t.Error("BUG 2: the in-flight reader reported active after the revoke committed")
+	}
+
+	// And nothing afterwards may see a resurrected token.
 	if res := h.introspect(t, token); res.Active {
 		t.Fatal("BUG 2: an in-flight cache fill resurrected a revoked token")
 	}
@@ -294,7 +374,9 @@ func TestConcurrentIntrospectDuringRevoke(t *testing.T) {
 		}()
 	}
 
-	time.Sleep(150 * time.Millisecond) // warm the cache under load
+	// Deliberately do NOT warm the cache. Readers must actually reach MySQL,
+	// or the race window never opens and this test proves nothing.
+	time.Sleep(150 * time.Millisecond)
 	if _, err := h.revoke.RevokeGrant(ctx, h.grant.ID,
 		structs.Actor{Type: constants.ActorUser, ID: "test"}, "concurrent revoke"); err != nil {
 		t.Fatalf("revoke: %v", err)
