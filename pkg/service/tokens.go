@@ -247,7 +247,21 @@ func (t *Tokens) lookup(ctx context.Context, hash string) (*structs.CachedToken,
 
 		out := detail.ToCached()
 
-		_ = t.tokens.Set(ctx, hash, out, time.Until(out.ExpiresAt))
+		// SetIfAbsent, never Set. A revocation may have committed and written
+		// its tombstone while this MySQL read was in flight; an unconditional
+		// write would overwrite it and resurrect a revoked token for the rest
+		// of its TTL.
+		//
+		// Losing matters beyond the cache: singleflight hands this return value
+		// to every waiter, so returning the stale record would report "active"
+		// to a whole batch even with the tombstone already in Redis. Whoever
+		// owns the key wins.
+		won, err := t.tokens.SetIfAbsent(ctx, hash, out, time.Until(out.ExpiresAt))
+		if err == nil && !won {
+			if cur := t.currentEntry(ctx, hash); cur != nil {
+				return cur, nil
+			}
+		}
 		return out, nil
 	})
 	if err != nil {
