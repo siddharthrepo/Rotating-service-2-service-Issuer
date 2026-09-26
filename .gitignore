@@ -1,6 +1,5 @@
 bin/
 .env
 *.test
-examples/
 docs/
 todo.txt
