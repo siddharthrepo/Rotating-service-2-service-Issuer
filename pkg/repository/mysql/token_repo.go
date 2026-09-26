@@ -122,7 +122,7 @@ func (r *TokenRepo) ByID(ctx context.Context, tx *sqlx.Tx, id uint64) (*structs.
 func (r *TokenRepo) RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID uint64, at time.Time) ([]structs.RevokedToken, error) {
 	killed := []structs.RevokedToken{}
 	err := tx.SelectContext(ctx, &killed, `
-		SELECT token_hash, expires_at
+		SELECT token_hash, grant_id, expires_at
 		  FROM tokens
 		 WHERE grant_id = ? AND revoked_at IS NULL AND expires_at > ?
 		   FOR UPDATE`, grantID, at)
@@ -151,7 +151,7 @@ func (r *TokenRepo) RevokeLiveByGrant(ctx context.Context, tx *sqlx.Tx, grantID 
 func (r *TokenRepo) LiveByService(ctx context.Context, serviceID uint64, at time.Time) ([]structs.RevokedToken, error) {
 	out := []structs.RevokedToken{}
 	err := r.db.SelectContext(ctx, &out, `
-		SELECT t.token_hash, t.expires_at
+		SELECT t.token_hash, t.grant_id, t.expires_at
 		  FROM tokens t
 		  JOIN grants g ON g.id = t.grant_id
 		 WHERE (g.caller_service_id = ? OR g.target_service_id = ?)

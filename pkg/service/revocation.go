@@ -222,5 +222,23 @@ func (r *Revocation) RevokeTokensForService(ctx context.Context, serviceID uint6
 			zap.Uint64("service_id", serviceID), zap.Error(err))
 		return 0, apperr.RevokedButCacheUnconfirmed.Wrap(err)
 	}
+
+	// Clear the current-token key for every affected grant as well.
+	//
+	// Without this, re-enabling the service within rotate_after hands callers
+	// back the same tombstoned token: the SDK gets a 401, refreshes, receives
+	// the identical dead token, and loops until the key expires.
+	seen := make(map[uint64]struct{}, len(killed))
+	for _, k := range killed {
+		if _, done := seen[k.GrantID]; done {
+			continue
+		}
+		seen[k.GrantID] = struct{}{}
+		if err := r.cache.Delete(ctx, k.GrantID); err != nil {
+			r.log.Error("clearing current-token key for a disabled service",
+				zap.Uint64("grant_id", k.GrantID), zap.Error(err))
+			return 0, apperr.RevokedButCacheUnconfirmed.Wrap(err)
+		}
+	}
 	return len(killed), nil
 }

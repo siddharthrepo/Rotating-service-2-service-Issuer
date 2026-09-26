@@ -575,6 +575,7 @@ type IntrospectResponse struct {
 // tombstone should inherit.
 type RevokedToken struct {
 	TokenHash string    `db:"token_hash"`
+	GrantID   uint64    `db:"grant_id"`
 	ExpiresAt time.Time `db:"expires_at"`
 }
 
