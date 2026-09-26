@@ -197,8 +197,10 @@ at 64 MiB per concurrent verification that is a memory-exhaustion vector. Needs
 a pre-auth, IP-keyed limiter before this faces an untrusted network.
 
 **Load-test numbers are preliminary.** The figures below are single-client,
-warm, local Docker — not a load test. Scenario coverage is planned in
-[`docs/LLD.md`](docs/LLD.md) §10.
+warm, local Docker — one client, no concurrency, no sustained load. They
+indicate the shape of the hot path, not its behaviour under traffic. A proper
+load test (steady state, hot-key, cold cache, Redis down, replica scale-out) is
+still outstanding.
 
 | | measured |
 |---|---|
@@ -218,7 +220,6 @@ warm, local Docker — not a load test. Scenario coverage is planned in
 | `examples/` | two real services plus `demo.sh` |
 | `test/` | integration tests against real MySQL and Redis |
 | `web/` | dashboard templates and assets, embedded via `go:embed` |
-| `docs/` | [`ARCHITECTURE`](docs/ARCHITECTURE.md) · [`HLD`](docs/HLD.md) · [`LLD`](docs/LLD.md) |
 
 ---
 
