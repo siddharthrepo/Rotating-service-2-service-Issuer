@@ -1,4 +1,4 @@
-.PHONY: help up down build run migrate fmt vet test test-integration demo clean
+.PHONY: help up down build run migrate fmt vet test test-integration demo docker docker-up docker-down clean
 
 BIN := bin/s2s
 ENV := S2S_MYSQL_DSN='s2s:s2spw@tcp(127.0.0.1:3308)/s2s?parseTime=true&multiStatements=true&loc=UTC' \
@@ -40,6 +40,18 @@ test:      ## Run unit and SDK tests with the race detector
 test-integration: ## Run integration tests against the running MySQL and Redis
 	@$(ENV) S2S_TEST_MYSQL_DSN='s2s:s2spw@tcp(127.0.0.1:3308)/s2s?parseTime=true&multiStatements=true&loc=UTC' \
 	  S2S_TEST_REDIS_ADDR=127.0.0.1:6381 go test -race -count=1 -v ./test/...
+
+docker:    ## Build the issuer container image
+	docker build -t s2s-issuer:local .
+
+docker-up: ## Run the whole stack in containers (issuer included)
+	docker compose -f deploy/docker-compose.yml --profile app up -d --build
+	@echo "waiting for the issuer..."
+	@until curl -sf localhost:9090/readyz >/dev/null 2>&1; do sleep 2; done
+	@echo "ready: http://localhost:8080"
+
+docker-down: ## Stop the containerised stack
+	docker compose -f deploy/docker-compose.yml --profile app down
 
 demo:      ## Run the two-service example against a running issuer
 	@cd examples && ./demo.sh

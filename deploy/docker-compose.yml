@@ -43,5 +43,35 @@ services:
       timeout: 5s
       retries: 20
 
+  issuer:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: s2s-issuer:local
+    container_name: rotating-s2s-issuer
+    # Behind the `app` profile so `make up` still starts dependencies only --
+    # local development runs the binary on the host for a one-second rebuild.
+    # `docker compose --profile app up` runs the whole stack instead.
+    profiles: ["app"]
+    depends_on:
+      mysql:   { condition: service_healthy }
+      redis:   { condition: service_healthy }
+    environment:
+      # Service names, not 127.0.0.1: inside the compose network the
+      # containers resolve each other by name on their real ports.
+      S2S_MYSQL_DSN: "s2s:s2spw@tcp(mysql:3306)/s2s?parseTime=true&multiStatements=true&loc=UTC"
+      S2S_REDIS_ADDR: "redis:6379"
+      S2S_SERVER_ADMIN_API_KEY: "${S2S_SERVER_ADMIN_API_KEY:-dev-admin-key-change-me}"
+      S2S_SERVER_SECURE_COOKIES: "false"
+      S2S_LOG_FORMAT: "json"
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "./s2s", "--help"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   rotating-s2s-mysql-data:

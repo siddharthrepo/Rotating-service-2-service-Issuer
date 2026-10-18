@@ -1,0 +1,12 @@
+# The build context is 43MB, 42MB of which is a host-built binary the image
+# must not contain anyway.
+bin/
+.git/
+.env
+*.test
+
+# Not needed to build the server.
+docs/
+examples/
+test/
+todo.txt
